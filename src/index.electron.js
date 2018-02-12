@@ -14,17 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+const argv = require('yargs').argv;
 const electron = require('electron');
-const { app, BrowserWindow, session } = electron;
-
 const path = require('path');
+const pick = require('lodash/pick');
 const url = require('url');
 
-const IS_DEV = process.argv.includes('--dev'); // Opens http://127.0.0.1:3000 in --dev mode
-
+const { app, BrowserWindow, session } = electron;
 let mainWindow;
 
-global.dirName = __dirname; // Will send this to renderers via IPC
+// Will send these variables to renderers via IPC
+global.dirName = __dirname;
+Object.assign(global, pick(argv, ['jsonrpcInterface', 'jsonrpcPort', 'wsInterface', 'wsPort']));
 
 function createWindow () {
   mainWindow = new BrowserWindow({
@@ -32,10 +33,12 @@ function createWindow () {
     width: 1200
   });
 
-  if (IS_DEV) {
+  if (argv.dev === true) {
+    // Opens http://127.0.0.1:3000 in --dev mode
     mainWindow.loadURL('http://127.0.0.1:3000');
     mainWindow.webContents.openDevTools();
   } else {
+    // Opens file:///path/to/.build/index.html in prod mode
     // TODO Check if file exists?
     mainWindow.loadURL(
       url.format({

@@ -21,6 +21,8 @@ import ReactDOM from 'react-dom';
 
 import injectTapEventPlugin from 'react-tap-event-plugin';
 import { IndexRoute, Redirect, Route, Router, hashHistory } from 'react-router';
+import isElectron from 'is-electron';
+import pick from 'lodash/pick';
 
 import ContractInstances from '@parity/shared/lib/contracts';
 import { initStore } from '@parity/shared/lib/redux';
@@ -55,7 +57,17 @@ if (process.env.NODE_ENV === 'development') {
 */
 
 function renderUI (token) {
-  const api = new SecureApi(window.location.host, token);
+  let urlOptions;
+
+  if (isElectron()) {
+    // Take --flag options from electron if available
+    urlOptions = pick(
+      window.require('electron').remote,
+      ['jsonrpcInterface', 'jsonrpcPort', 'wsInterface', 'wsPort']
+    );
+  }
+
+  const api = new SecureApi(urlOptions, token);
 
   api.parity.registryAddress().then((address) => console.log('registryAddress', address)).catch((error) => console.error('registryAddress', error));
 

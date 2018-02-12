@@ -22,26 +22,22 @@ import { LOG_KEYS, getLogger } from '@parity/shared/lib/config';
 
 const log = getLogger(LOG_KEYS.Signer);
 
-const RPC_URL = '127.0.0.1:8545';
-const WS_URL = '127.0.0.1:8546';
-const UI_URL = '127.0.0.1:8180';
+// Defaults
+const JSONRPC_INTERFACE = '127.0.0.1';
+const JSONPRC_PORT = '8545';
+const WS_INTERFACE = '127.0.0.1';
+const WS_PORT = '8546';
 
 export default class SecureApi extends Api {
   _isConnecting = false;
   _needsToken = false;
   _tokens = [];
-  _uiApi = null;
 
   _dappsUrl = null;
   _wsUrl = null;
-  _url = null;
 
-  static getHttpProvider (url, protocol) {
-    return new Api.Provider.Http(`${protocol}//${url || RPC_URL}/rpc`, 0);
-  }
-
-  static getWsProvider (url, protocol, sysuiToken) {
-    const transportUrl = SecureApi.transportWsUrl(url || WS_URL, protocol);
+  static getWsProvider (wsUrl, protocol, sysuiToken) {
+    const transportUrl = SecureApi.transportWsUrl(wsUrl, protocol);
 
     return new Api.Provider.Ws(transportUrl, sysuiToken, false);
   }
@@ -59,19 +55,27 @@ export default class SecureApi extends Api {
       : window.location.protocol;
   }
 
-  constructor (uiUrl, nextToken, getProvider = SecureApi.getWsProvider, protocol = SecureApi.protocol) {
+  constructor (urlOptions, nextToken, getProvider = SecureApi.getWsProvider, protocol = SecureApi.protocol) {
     const sysuiToken = store.get('sysuiToken');
-    const wsProvider = getProvider(uiUrl, protocol, sysuiToken);
+    const opts = {
+      jsonrpcInterface: JSONRPC_INTERFACE,
+      jsonrpcPort: JSONPRC_PORT,
+      wsInterface: WS_INTERFACE,
+      wsPort: WS_PORT,
+      ...urlOptions
+    };
+
+    const _dappsUrl = `${opts.jsonrpcInterface}:${opts.jsonrpcPort}`;
+    const _wsUrl = `${opts.wsInterface}:${opts.wsPort}`;
+
+    const wsProvider = getProvider(_wsUrl, protocol, sysuiToken);
 
     super(wsProvider);
 
     this.protocol = protocol;
-    this._url = uiUrl || UI_URL;
+    this._dappsUrl = _dappsUrl;
+    this._wsUrl = _wsUrl;
 
-    const httpProvider = SecureApi.getHttpProvider(this._url, this.protocol());
-
-    this._uiApi = new Api(httpProvider, false);
-    this._wsUrl = uiUrl;
     // Try tokens from localStorage, from hash and 'initial'
     this._tokens = uniq([sysuiToken, nextToken, 'initial'])
       .filter((token) => token)
@@ -210,7 +214,7 @@ export default class SecureApi extends Api {
    * otherwise (HEAD request to the Node)
    */
   isNodeUp () {
-    return fetch(`${this.protocol()}//${this._url}/api/ping`, { method: 'HEAD' })
+    return fetch(`${this.protocol()}//${this._wsUrl}/api/ping`, { method: 'HEAD' })
       .then(
         (r) => r.status === 200,
         () => false
@@ -228,7 +232,7 @@ export default class SecureApi extends Api {
     log.debug('updating token', token);
 
     // Update the tokens list: put the new one on first position
-    this._tokens = [ { value: token, tried: false } ].concat(this._tokens);
+    this._tokens = [{ value: token, tried: false }].concat(this._tokens);
 
     // Try to connect with the new token added
     return this.connect();
@@ -279,16 +283,13 @@ export default class SecureApi extends Api {
     // Sanitize the token first
     const token = this._sanitiseToken(_token);
 
-    const connectPromise = this._fetchSettings()
-      .then(() => {
-        // Update the URL and token in the transport layer
-        this.transport.url = SecureApi.transportWsUrl(this._wsUrl, this.protocol);
-        this.provider.updateToken(token, false);
+    // Update the URL and token in the transport layer
+    this.transport.url = SecureApi.transportWsUrl(this._wsUrl, this.protocol);
+    this.provider.updateToken(token, false);
 
-        log.debug('connecting with token', token);
+    log.debug('connecting with token', token);
 
-        return this.provider.connect();
-      })
+    const connectPromise = this.provider.connect()
       .then(() => {
         log.debug('connected with', token);
 
@@ -313,7 +314,7 @@ export default class SecureApi extends Api {
         connectPromise,
         this.isNodeUp()
       ])
-      .then(([ connected, isNodeUp ]) => {
+      .then(([connected, isNodeUp]) => {
         if (connected) {
           return true;
         }
@@ -334,22 +335,6 @@ export default class SecureApi extends Api {
         // The token is invalid
         log.debug('tried with a wrong token', token);
         return false;
-      });
-  }
-
-  /**
-   * Retrieve the correct ports from the Node
-   */
-  _fetchSettings () {
-    return Promise
-      .all([
-        // ignore dapps disabled errors
-        this._uiApi.parity.dappsUrl().catch(() => null),
-        this._uiApi.parity.wsUrl()
-      ])
-      .then(([dappsUrl, wsUrl]) => {
-        this._dappsUrl = this._resolveHost(dappsUrl);
-        this._wsUrl = this._resolveHost(wsUrl);
       });
   }
 
