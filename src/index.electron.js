@@ -15,8 +15,7 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 const electron = require('electron');
-const app = electron.app;
-const BrowserWindow = electron.BrowserWindow;
+const { app, BrowserWindow, session } = electron;
 
 const path = require('path');
 const url = require('url');
@@ -46,7 +45,15 @@ function createWindow () {
       })
     );
   }
-  // }
+
+  // WS calls have Origin `file://` by default, which is not trusted.
+  // We override Origin header on all WS connections with an authorized one.
+  session.defaultSession.webRequest.onBeforeSendHeaders({
+    urls: ['ws://*/*', 'wss://*/*']
+  }, (details, callback) => {
+    details.requestHeaders.Origin = `parity://${mainWindow.id}.wallet.parity`;
+    callback({ requestHeaders: details.requestHeaders });
+  });
 
   mainWindow.on('closed', function () {
     mainWindow = null;
