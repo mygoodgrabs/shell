@@ -17,9 +17,9 @@ before_install:
 install:
   - npm install
 script:
-  - ./scripts/lint.sh
-  - ./scripts/build.sh
-  - ./scripts/push-precompiled.sh
+  # - ./scripts/lint.sh
+  # - ./scripts/build.sh
+  # - ./scripts/push-precompiled.sh
   - ./scripts/package.sh
 deploy:
   - provider: releases
@@ -33,7 +33,7 @@ deploy:
     skip_cleanup: true
     on:
       condition: $TRAVIS_OS_NAME = linux
-      tags: true
+      branch: am-testing
   - provider: releases
     api_key: $GH_TOKEN
     draft: true
@@ -44,4 +44,4 @@ deploy:
     skip_cleanup: true
     on:
       condition: $TRAVIS_OS_NAME = osx
-      tags: true
+      branch: am-testing
